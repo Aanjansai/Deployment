@@ -1,0 +1,113 @@
+resources:
+- name: deploy-01
+  type: compute.v1.network
+  properties:
+    routingConfig:
+      routingMode: REGIONAL
+    autoCreateSubnetworks: false
+
+
+- name: sub-deploy
+  type: compute.v1.subnetwork
+  properties:
+    region: asia-south1
+    subnetwork: https://www.googleapis.com/compute/v1/projects/web-application-231505/regions/asia-south1/subnetworks/sub-deploy
+    privateIpGoogleAccess: false
+    enableFlowLogs: false
+    secondaryIpRanges: []
+    ipCidrRange: 10.1.2.0/24
+    network: https://clients6.google.com/compute/v1/projects/web-application-231505/global/networks/deploy-01
+
+
+- type: compute.v1.firewall
+  name: allow-app-deploy
+  properties:
+    firewall: https://www.googleapis.com/compute/v1/projects/web-application-231505/global/firewalls/allow-app-deploy
+    network: https://clients6.google.com/compute/v1/projects/web-application-231505/global/networks/deploy-01
+    direction: INGRESS
+    priority: 1000
+    targetTags:
+    - allow-app-deploy
+    allowed:
+    - IPProtocol: tcp
+      ports:
+      - '22'
+    sourceRanges:
+    - 0.0.0.0/0
+
+
+- name: the-first-vm
+  type: compute.v1.instance
+  properties: 
+    zone: asia-south1-c
+    machineType: https://www.googleapis.com/compute/v1/projects/web-application-231505/zones/asia-south1-c/machineTypes/f1-micro
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: https://www.googleapis.com/compute/v1/projects/web-application-231505/global/images/image-01
+    networkInterfaces:
+    - network: https://www.googleapis.com/compute/v1/projects/web-application-231505/global/networks/deploy-01
+      subnetwork: https://www.googleapis.com/compute/v1/projects/web-application-231505/regions/asia-south1/subnetworks/sub-deploy
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+
+
+- name: deploy-storagebucket-01
+  type: storage.v1.bucket
+  properties:
+    storageClass: Nearline
+    versioning:
+      enabled: false
+
+
+- name: template-02
+  type: compute.v1.instanceTemplate
+  properties:
+    properties:
+      metadata:
+        type: compute.v1.metadata 
+        items: []
+      machineType: f1-micro
+      disks:
+      - deviceName: boot
+        boot: true
+        autoDelete: true
+        mode: READ_WRITE
+        type: PERSISTENT
+        initializeParams:
+          sourceImage: https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/ubuntu-1804-bionic-v20190212a
+      networkInterfaces:
+      - kind: compute.v1.networkInterface
+        network: https://www.googleapis.com/compute/v1/projects/web-application-231505/global/networks/deploy-01
+        subnetwork: https://www.googleapis.com/compute/v1/projects/web-application-231505/regions/asia-south1/subnetworks/sub-deploy
+      - accessConfigs:
+        - name: external-nat
+          type: ONE_TO_ONE_NAT
+
+
+
+- name: deploy-igm
+  type: compute.v1.instanceGroupManager
+  properties:
+    zone: asia-south1-c
+    targetSize: 1
+    baseInstanceName: deploy-instance
+    instanceTemplate:  https://www.googleapis.com/compute/v1/projects/web-application-231505/global/instanceTemplates/template-02
+
+- name: deploy-as
+  type: compute.v1.autoscaler
+  properties:
+    zone: asia-south1-c
+    target: $(ref.deploy-igm.selfLink)
+    autoscalingPolicy:
+      maxNumReplicas: 10
+
+
+
+
+
+
